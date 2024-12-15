@@ -1,6 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/apiError.js";
-import { User } from "../models/user.model.js";
+import { ApiResponse } from "../utils/apiResponse.js";
+import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -20,12 +21,12 @@ const registerUser = asyncHandler(async (req, res) => {
   if ([name, email, password].some((field) => field.trim() === "")) {
     throw new ApiError(400, "All fields are required");
   }
-  const userExists = User.findOne({ $or: [{ email }] });
+  const userExists = await User.findOne({ $or: [{ email }] });
   if (userExists) {
     throw new ApiError(409, "User already exists");
   }
 
-  const avatarLocalPath = req.files?.avatar[0]?.path;
+  const avatarLocalPath = req.file.path;
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar is required");
   }

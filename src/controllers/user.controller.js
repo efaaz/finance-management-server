@@ -3,6 +3,24 @@ import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
+import jwt from "jsonwebtoken";
+
+const generateAccessAndRefereshTokens = async(userId) =>{
+  try {
+      const user = await User.findById(userId)
+      const accessToken = user.generateAccessToken()
+      const refreshToken = user.generateRefreshToken()
+
+      user.refreshToken = refreshToken
+      await user.save({ validateBeforeSave: false })
+
+      return {accessToken, refreshToken}
+
+
+  } catch (error) {
+      throw new ApiError(500, "Something went wrong while generating referesh and access token")
+  }
+}
 
 const registerUser = asyncHandler(async (req, res) => {
   // get user details from frontend

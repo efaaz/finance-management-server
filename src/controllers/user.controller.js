@@ -5,22 +5,24 @@ import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 
-const generateAccessAndRefereshTokens = async(userId) =>{
+const generateAccessAndRefereshTokens = async (userId) => {
   try {
-      const user = await User.findById(userId)
-      const accessToken = user.generateAccessToken()
-      const refreshToken = user.generateRefreshToken()
+    const user = await User.findById(userId);
 
-      user.refreshToken = refreshToken
-      await user.save({ validateBeforeSave: false })
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
 
-      return {accessToken, refreshToken}
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
 
-
+    return { accessToken, refreshToken };
   } catch (error) {
-      throw new ApiError(500, "Something went wrong while generating referesh and access token")
+    throw new ApiError(
+      500,
+      "Something went wrong while generating referesh and access token"
+    );
   }
-}
+};
 
 const registerUser = asyncHandler(async (req, res) => {
   // get user details from frontend
@@ -73,4 +75,75 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User registered Successfully"));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  // get user details from frontend
+  // validation - not empty
+  // check if user exists
+  // check if password matches
+  // generate access token and refresh token
+  // send cookies with refresh token
+  // return res
+
+  const { email, password } = req.body;
+
+  if ([email, password].some((field) => field.trim() === "")) {
+    throw new ApiError(400, "All fields are required");
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const isPasswordMatch = await user.isPasswordCorrect(password);
+  if (!isPasswordMatch) {
+    throw new ApiError(401, "Invalid credentials");
+  }
+
+  const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(
+    user._id
+  );
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  const cookieOptions = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("refreshToken", refreshToken, cookieOptions)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .json(
+      new ApiResponse(
+        200,
+        { user: loggedInUser, accessToken, refreshToken },
+        "User logged in successfully"
+      )
+    );
+});
+
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $unset: { refreshToken: 1 },
+    },
+    { new: true }
+  );
+
+  const cookieOptions = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("refreshToken", cookieOptions)
+    .clearCookie("accessToken", cookieOptions)
+    .json(new ApiResponse(200, {}, "User logged out successfully"));
+});
+
+export { registerUser, loginUser, logoutUser };

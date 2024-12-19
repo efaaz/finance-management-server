@@ -27,7 +27,7 @@ const spendingRecordSchema = new Schema(
 );
 spendingRecordSchema.index({ user: 1, date: 1 }); // Index for efficient querying by user and date
 
-export const spendingRecored = mongoose.model(
+export const SpendingRecord = mongoose.model(
   "SpendingRecord",
   spendingRecordSchema
 );

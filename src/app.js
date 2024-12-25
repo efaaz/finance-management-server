@@ -17,9 +17,11 @@ app.use(cookieParser());
 import userRoutes from './routes/user.routes.js';
 import spendingRecordRoutes from './routes/spendingRecord.routes.js';
 import updateDailyRecord from './routes/dailyRecords.routes.js';
+import transactionRoutes from './routes/transaction.routes.js';
 
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/spending-records', spendingRecordRoutes);
 app.use('/api/v1/updateDailyRecord', updateDailyRecord);
+app.use('/api/v1/transactions', transactionRoutes);
 
 export { app };

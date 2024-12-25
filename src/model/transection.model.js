@@ -1,6 +1,6 @@
 import mongoose, {Schema} from "mongoose";
 
-const transectionSchema = new Schema({
+const transactionSchema = new Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
@@ -26,4 +26,4 @@ const transectionSchema = new Schema({
     },
 });
 
-export const transection = mongoose.model("Transection", transectionSchema);
+export const Transaction = mongoose.model("Transaction", transactionSchema);

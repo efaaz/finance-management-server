@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   changeCurrentPassword,
   getCurrentUser,
+  googleLogin,
   loginUser,
   logoutUser,
   refreshAccessToken,
@@ -16,6 +17,7 @@ const router = Router();
 
 router.route("/register").post(upload.single("avatar"), registerUser);
 router.route("/login").post(loginUser);
+router.route("/auth/google").post(googleLogin);
 router.route("/refresh-token").post(refreshAccessToken);
 
 // Secure routes

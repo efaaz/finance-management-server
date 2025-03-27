@@ -4,6 +4,12 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
+const client = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+);
 
 const generateAccessAndRefereshTokens = async (userId) => {
   try {
@@ -123,6 +129,77 @@ const loginUser = asyncHandler(async (req, res) => {
         "User logged in successfully"
       )
     );
+});
+
+const googleLogin = asyncHandler(async (req, res) => {
+  // Get the authorization code from the request
+  const { code } = req.body;
+  console.log("Received code:", code);
+  if (!code) {
+    throw new ApiError(400, "Authorization code is required");
+  }
+
+  // Exchange the code for tokens
+  const { tokens } = await client.getToken({
+    code,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+  });
+
+  // Verify the ID token
+  const ticket = await client.verifyIdToken({
+    idToken: tokens.id_token,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+
+  // Get user information from the payload
+  const { email, name, picture } = ticket.getPayload();
+  console.log("PAYLOAD", ticket.getPayload());
+
+  // Check if user already exists
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    // Create new user if doesn't exist
+    user = await User.create({
+      name,
+      email,
+      avatar: picture,
+      // Set a secure random password or use a different auth method flag
+      password:
+        Math.random().toString(36).slice(-8) +
+        Math.random().toString(36).slice(-8),
+    });
+  }
+
+  // Generate authentication tokens
+  const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(
+    user._id
+  );
+
+  // Get user data without sensitive information
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  // Set cookies
+  const cookieOptions = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return (
+    res
+      .status(200)
+      .cookie("refreshToken", refreshToken, cookieOptions)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .json(
+        new ApiResponse(
+          200,
+          { user: loggedInUser, accessToken, refreshToken },
+          "User logged in with Google successfully"
+        )
+      )
+  );
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -250,6 +327,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, user, "Avatar updated successfully"));
 });
+
 export {
   registerUser,
   loginUser,
@@ -259,4 +337,5 @@ export {
   getCurrentUser,
   updateAccountDetails,
   updateUserAvatar,
+  googleLogin,
 };

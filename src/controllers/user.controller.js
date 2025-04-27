@@ -5,6 +5,8 @@ import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import { log } from "node:console";
+import { CLOUD_RESOURCE_MANAGER } from "google-auth-library/build/src/auth/baseexternalclient.js";
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -14,12 +16,13 @@ const client = new OAuth2Client(
 const generateAccessAndRefereshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
-
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
+    console.log("User refresh token", user.refreshToken);
+    console.log("User access token", accessToken); 
 
     return { accessToken, refreshToken };
   } catch (error) {
@@ -52,14 +55,10 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(409, "User already exists");
   }
 
-  const avatarLocalPath = req.file.path;
-  if (!avatarLocalPath) {
-    throw new ApiError(400, "Avatar is required");
-  }
-
-  const avatar = await uploadToCloudinary(avatarLocalPath);
-  if (!avatar) {
-    throw new ApiError(500, "Error uploading avatar");
+  const avatarLocalPath = req.file?.path ;
+  let avatar = "";
+  if (avatarLocalPath) {
+    avatar = await uploadToCloudinary(avatarLocalPath);
   }
 
   let user = await User.create({
@@ -184,7 +183,8 @@ const googleLogin = asyncHandler(async (req, res) => {
   // Set cookies
   const cookieOptions = {
     httpOnly: true,
-    secure: true,
+    secure: false,
+    sameSite: "none",
   };
 
   return (
@@ -226,9 +226,15 @@ const logoutUser = asyncHandler(async (req, res) => {
 const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomeingRefreshToken = req.cookies.refreshToken;
 
-  if (!incomeingRefreshToken) {
-    throw new ApiError(401, "Unauthorized request");
-  }
+   // Debug logging
+   console.log("Received cookies:", req.cookies);
+   console.log("Refresh token exists:", incomeingRefreshToken);
+
+   if (!incomeingRefreshToken) {
+     return res.status(401).json(
+       new ApiResponse(401, null, "Authorization required")
+     );
+   }
 
   const decodedToken = jwt.verify(
     incomeingRefreshToken,
@@ -242,21 +248,22 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   if (user?.refreshToken !== incomeingRefreshToken) {
     throw new ApiError(401, "Refresh token is expired of used");
   }
-  const { accessToken, newRefreshToken } =
+  const { accessToken, refreshToken } =
     await generateAccessAndRefereshTokens(user._id);
   const cookieOptions = {
     httpOnly: true,
     secure: true,
   };
-
+  console.log("New refresh token", refreshToken);
+  
   return res
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
-    .cookie("refreshToken", newRefreshToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new ApiResponse(
         200,
-        { accessToken, refreshToken: newRefreshToken },
+        { accessToken, refreshToken: refreshToken },
         "Access token refreshed"
       )
     );

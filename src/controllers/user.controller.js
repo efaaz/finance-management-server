@@ -5,8 +5,6 @@ import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import { log } from "node:console";
-import { CLOUD_RESOURCE_MANAGER } from "google-auth-library/build/src/auth/baseexternalclient.js";
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -20,9 +18,9 @@ const generateAccessAndRefereshTokens = async (userId) => {
     const refreshToken = user.generateRefreshToken();
 
     user.refreshToken = refreshToken;
-    await user.save({ validateBeforeSave: false });
-    console.log("User refresh token", user.refreshToken);
-    console.log("User access token", accessToken); 
+    await user.save({ validateBeforeSave: true });
+    // console.log("generate refresh token", user.refreshToken);
+    // console.log("generate access token", accessToken);
 
     return { accessToken, refreshToken };
   } catch (error) {
@@ -55,7 +53,7 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(409, "User already exists");
   }
 
-  const avatarLocalPath = req.file?.path ;
+  const avatarLocalPath = req.file?.path;
   let avatar = "";
   if (avatarLocalPath) {
     avatar = await uploadToCloudinary(avatarLocalPath);
@@ -114,7 +112,10 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const cookieOptions = {
     httpOnly: true,
-    secure: true,
+    secure: true,           // required when SameSite=None
+    sameSite: 'none',       // allow on CORS POST/fetch
+    domain: 'localhost',
+    path: '/',
   };
 
   return res
@@ -187,19 +188,17 @@ const googleLogin = asyncHandler(async (req, res) => {
     sameSite: "none",
   };
 
-  return (
-    res
-      .status(200)
-      .cookie("refreshToken", refreshToken, cookieOptions)
-      .cookie("accessToken", accessToken, cookieOptions)
-      .json(
-        new ApiResponse(
-          200,
-          { user: loggedInUser, accessToken, refreshToken },
-          "User logged in with Google successfully"
-        )
+  return res
+    .status(200)
+    .cookie("refreshToken", refreshToken, cookieOptions)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .json(
+      new ApiResponse(
+        200,
+        { user: loggedInUser, accessToken, refreshToken },
+        "User logged in with Google successfully"
       )
-  );
+    );
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -226,36 +225,42 @@ const logoutUser = asyncHandler(async (req, res) => {
 const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomeingRefreshToken = req.cookies.refreshToken;
 
-   // Debug logging
-   console.log("Received cookies:", req.cookies);
-   console.log("Refresh token exists:", incomeingRefreshToken);
+  // Debug logging
+  // console.log("Received cookies:", req.cookies);
+  // console.log("Refresh token exists:", incomeingRefreshToken);
 
-   if (!incomeingRefreshToken) {
-     return res.status(401).json(
-       new ApiResponse(401, null, "Authorization required")
-     );
-   }
-
+  if (incomeingRefreshToken === undefined) {
+    return res
+      .status(401)
+      .json(new ApiResponse(401, null, "Authorization required"));
+  }
   const decodedToken = jwt.verify(
     incomeingRefreshToken,
     process.env.REFRESH_TOKEN_SECRET
   );
+  
   const user = await User.findById(decodedToken?._id);
 
   if (!user) {
     throw new ApiError(401, "Invalid refresh token");
   }
   if (user?.refreshToken !== incomeingRefreshToken) {
-    throw new ApiError(401, "Refresh token is expired of used");
+    return res
+    .status(401)
+    .json(new ApiResponse(401, null, "Authorization required"));
   }
-  const { accessToken, refreshToken } =
-    await generateAccessAndRefereshTokens(user._id);
+  const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(
+    user._id
+  );
   const cookieOptions = {
     httpOnly: true,
-    secure: true,
+    secure: true,           // required when SameSite=None
+    sameSite: 'none',       // allow on CORS POST/fetch
+    domain: 'localhost',
+    path: '/',
   };
-  console.log("New refresh token", refreshToken);
-  
+  // console.log("New refresh token", refreshToken);
+
   return res
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
@@ -263,7 +268,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         200,
-        { accessToken, refreshToken: refreshToken },
+        { accessToken, refreshToken },
         "Access token refreshed"
       )
     );

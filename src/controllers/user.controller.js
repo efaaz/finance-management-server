@@ -5,6 +5,7 @@ import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import path from "path";
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -181,11 +182,14 @@ const googleLogin = asyncHandler(async (req, res) => {
     "-password -refreshToken"
   );
 
-  // Set cookies
+
   const cookieOptions = {
     httpOnly: true,
-    secure: false,
-    sameSite: "none",
+    secure: true,           // required when SameSite=None
+    sameSite: 'none',
+    domain: 'localhost',
+    path: '/',
+    
   };
 
   return res
@@ -296,6 +300,8 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
+  console.log("Current user", req.user);
+  
   res
     .status(200)
     .json(new ApiResponse(200, req.user, "User fetched successfully"));

@@ -8,7 +8,7 @@ dotenv.config();
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
   try {
-    // console.log("From middleware", req.cookies);
+    console.log("From middleware", req.cookies);
     const token =
       req.cookies?.accessToken ||
       req.header("Authorization").replace("Bearer ", "");
@@ -22,6 +22,8 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     const user = await User.findById(decoded?._id).select(
       "-password -refreshToken"
     );
+    console.log("User from middleware", user);
+    
     if (!user) {
       throw new ApiError(401, "Invalid Access Token");
     }

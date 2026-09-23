@@ -5,29 +5,49 @@ import { User } from "../model/user.model.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import path from "path";
+import crypto from "node:crypto";
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.GOOGLE_REDIRECT_URI
 );
 
-const generateAccessAndRefereshTokens = async (userId) => {
+const getAuthCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  path: "/",
+});
+
+const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
+
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
     user.refreshToken = refreshToken;
-    await user.save({ validateBeforeSave: true });
-    // console.log("generate refresh token", user.refreshToken);
-    // console.log("generate access token", accessToken);
 
-    return { accessToken, refreshToken };
+    await user.save({
+      validateBeforeSave: false,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+    };
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     throw new ApiError(
       500,
-      "Something went wrong while generating referesh and access token"
+      "Something went wrong while generating access and refresh tokens",
     );
   }
 };
@@ -73,12 +93,10 @@ const registerUser = asyncHandler(async (req, res) => {
   if (!createdUser) {
     throw new ApiError(500, "Something went wrong while registering the user");
   }
-
   return res
     .status(201)
     .json(new ApiResponse(200, createdUser, "User registered Successfully"));
 });
-
 const loginUser = asyncHandler(async (req, res) => {
   // get user details from frontend
   // validation - not empty
@@ -87,121 +105,126 @@ const loginUser = asyncHandler(async (req, res) => {
   // generate access token and refresh token
   // send cookies with refresh token
   // return res
-
   const { email, password } = req.body;
 
-  if ([email, password].some((field) => field.trim() === "")) {
+  if ([email, password].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All fields are required");
   }
 
   const user = await User.findOne({ email });
+
   if (!user) {
     throw new ApiError(404, "User not found");
   }
 
   const isPasswordMatch = await user.isPasswordCorrect(password);
+
   if (!isPasswordMatch) {
     throw new ApiError(401, "Invalid credentials");
   }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(
-    user._id
-  );
+  const { accessToken, refreshToken } =
+    await generateAccessAndRefreshTokens(user._id);
+
   const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken"
+    "-password -refreshToken",
   );
 
-  const cookieOptions = {
-    httpOnly: true,
-    secure: true,           // required when SameSite=None
-    sameSite: 'none',       // allow on CORS POST/fetch
-    domain: 'localhost',
-    path: '/',
-  };
+  const cookieOptions = getAuthCookieOptions();
 
   return res
     .status(200)
-    .cookie("refreshToken", refreshToken, cookieOptions)
     .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new ApiResponse(
         200,
-        { user: loggedInUser, accessToken, refreshToken },
-        "User logged in successfully"
-      )
+        {
+          user: loggedInUser,
+        },
+        "User logged in successfully",
+      ),
     );
 });
 
+
 const googleLogin = asyncHandler(async (req, res) => {
-  // Get the authorization code from the request
   const { code } = req.body;
-  console.log("Received code:", code);
+
   if (!code) {
     throw new ApiError(400, "Authorization code is required");
   }
 
-  // Exchange the code for tokens
+  // Exchange Google authorization code for Google tokens
   const { tokens } = await client.getToken({
     code,
     redirect_uri: process.env.GOOGLE_REDIRECT_URI,
   });
 
-  // Verify the ID token
+  if (!tokens.id_token) {
+    throw new ApiError(400, "Google ID token was not returned");
+  }
+
+  // Verify Google ID token
   const ticket = await client.verifyIdToken({
     idToken: tokens.id_token,
     audience: process.env.GOOGLE_CLIENT_ID,
   });
 
-  // Get user information from the payload
-  const { email, name, picture } = ticket.getPayload();
-  console.log("PAYLOAD", ticket.getPayload());
+  const payload = ticket.getPayload();
 
-  // Check if user already exists
+  if (!payload) {
+    throw new ApiError(400, "Invalid Google token payload");
+  }
+
+  const { email, name, picture, email_verified } = payload;
+
+  if (!email || !email_verified) {
+    throw new ApiError(
+      400,
+      "Google account email could not be verified",
+    );
+  }
+
+  // Find existing user
   let user = await User.findOne({ email });
 
+  // Create user if this is their first Google login
   if (!user) {
-    // Create new user if doesn't exist
     user = await User.create({
-      name,
+      name: name || "Google User",
       email,
-      avatar: picture,
-      // Set a secure random password or use a different auth method flag
-      password:
-        Math.random().toString(36).slice(-8) +
-        Math.random().toString(36).slice(-8),
+      avatar: picture || "",
+
+      // Random password because this account was created
+      // through Google authentication.
+      password: crypto.randomBytes(32).toString("hex"),
     });
   }
 
-  // Generate authentication tokens
-  const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(
-    user._id
-  );
+  // Generate FinX's own authentication tokens
+  const { accessToken, refreshToken } =
+    await generateAccessAndRefreshTokens(user._id);
 
-  // Get user data without sensitive information
+  // Remove sensitive fields from response
   const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken"
+    "-password -refreshToken",
   );
 
-
-  const cookieOptions = {
-    httpOnly: true,
-    secure: true,           // required when SameSite=None
-    sameSite: 'none',
-    domain: 'localhost',
-    path: '/',
-    
-  };
+  const cookieOptions = getAuthCookieOptions();
 
   return res
     .status(200)
-    .cookie("refreshToken", refreshToken, cookieOptions)
     .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new ApiResponse(
         200,
-        { user: loggedInUser, accessToken, refreshToken },
-        "User logged in with Google successfully"
-      )
+        {
+          user: loggedInUser,
+        },
+        "User logged in with Google successfully",
+      ),
     );
 });
 
@@ -209,61 +232,56 @@ const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      $unset: { refreshToken: 1 },
+      $unset: {
+        refreshToken: 1,
+      },
     },
-    { new: true }
+    {
+      new: true,
+    },
   );
 
-  const cookieOptions = {
-    httpOnly: true,
-    secure: true,
-  };
+  const cookieOptions = getAuthCookieOptions();
 
   return res
     .status(200)
-    .clearCookie("refreshToken", cookieOptions)
     .clearCookie("accessToken", cookieOptions)
-    .json(new ApiResponse(200, {}, "User logged out successfully"));
+    .clearCookie("refreshToken", cookieOptions)
+    .json(
+      new ApiResponse(
+        200,
+        null,
+        "User logged out successfully",
+      ),
+    );
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incomeingRefreshToken = req.cookies.refreshToken;
+  const incomingRefreshToken = req.cookies?.refreshToken;
 
-  // Debug logging
-  // console.log("Received cookies:", req.cookies);
-  // console.log("Refresh token exists:", incomeingRefreshToken);
-
-  if (incomeingRefreshToken === undefined) {
-    return res
-      .status(401)
-      .json(new ApiResponse(401, null, "Authorization required"));
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Authorization required");
   }
+
   const decodedToken = jwt.verify(
-    incomeingRefreshToken,
-    process.env.REFRESH_TOKEN_SECRET
+    incomingRefreshToken,
+    process.env.REFRESH_TOKEN_SECRET,
   );
-  
+
   const user = await User.findById(decodedToken?._id);
 
   if (!user) {
     throw new ApiError(401, "Invalid refresh token");
   }
-  if (user?.refreshToken !== incomeingRefreshToken) {
-    return res
-    .status(401)
-    .json(new ApiResponse(401, null, "Authorization required"));
+
+  if (user.refreshToken !== incomingRefreshToken) {
+    throw new ApiError(401, "Invalid refresh token");
   }
-  const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(
-    user._id
-  );
-  const cookieOptions = {
-    httpOnly: true,
-    secure: true,           // required when SameSite=None
-    sameSite: 'none',       // allow on CORS POST/fetch
-    domain: 'localhost',
-    path: '/',
-  };
-  // console.log("New refresh token", refreshToken);
+
+  const { accessToken, refreshToken } =
+    await generateAccessAndRefreshTokens(user._id);
+
+  const cookieOptions = getAuthCookieOptions();
 
   return res
     .status(200)
@@ -272,9 +290,9 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         200,
-        { accessToken, refreshToken },
-        "Access token refreshed"
-      )
+        null,
+        "Access token refreshed successfully",
+      ),
     );
 });
 

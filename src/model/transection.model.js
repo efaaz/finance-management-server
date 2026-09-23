@@ -1,33 +1,53 @@
-import mongoose, {Schema} from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
-const transactionSchema = new Schema({
+const transactionSchema = new Schema(
+  {
     userId: {
-        type: String,
-        ref: "User",
-        required: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
+
     categoryId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Category",
-        required: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      required: true,
     },
-    type:{
-        type: String,
-        enum: ["income", "spending"],
-        required: true,
+
+    type: {
+      type: String,
+      enum: ["income", "spending"],
+      required: true,
     },
+
     date: {
-        type: Date,
-        required: true,
-      },
+      type: Date,
+      required: true,
+    },
+
     amount: {
-        type: Number,
-        required: true,
+      type: Number,
+      required: true,
+      min: 0,
     },
+
     note: {
-        type: String,
-        default: "",
+      type: String,
+      trim: true,
+      default: "",
     },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+transactionSchema.index({
+  userId: 1,
+  date: -1,
 });
 
-export const Transaction = mongoose.model("Transaction", transactionSchema);
+export const Transaction = mongoose.model(
+  "Transaction",
+  transactionSchema,
+);

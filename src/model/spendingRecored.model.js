@@ -7,25 +7,31 @@ const spendingRecordSchema = new Schema(
       ref: "User",
       required: true,
     },
+
     dailyRecord: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "DailyRecord",
       required: true,
     },
+
+    // YYYY-MM-DD
     date: {
       type: String,
       required: true,
-    }, // Format: YYYY-MM-DD
+    },
+
     spending: {
       type: Map,
       of: Number,
-      required: true,
       default: {},
-    }, // Key-value pair of categories and their amounts
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
-spendingRecordSchema.index({ user: 1, date: 1 }); // Index for efficient querying by user and date
+
+spendingRecordSchema.index({ user: 1, date: 1 }, { unique: true });
 
 export const SpendingRecord = mongoose.model(
   "SpendingRecord",

@@ -7,22 +7,35 @@ const dailyRecordSchema = new Schema(
       ref: "User",
       required: true,
     },
+
+    // YYYY-MM-DD
     date: {
       type: String,
       required: true,
-    }, // Format: YYYY-MM-DD
+    },
+
     totalIncome: {
       type: Number,
       default: 0,
+      min: 0,
     },
+
     totalSpending: {
       type: Number,
       default: 0,
+      min: 0,
     },
-    netIncome: { type: Number, default: 0 },
+
+    netIncome: {
+      type: Number,
+      default: 0,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-dailyRecordSchema.index({ user: 1, date: 1 }, { unique: true }); // Ensure unique daily records per user and date
+dailyRecordSchema.index({ user: 1, date: 1 }, { unique: true });
+
 export const dailyRecord = mongoose.model("DailyRecord", dailyRecordSchema);

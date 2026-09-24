@@ -6,6 +6,8 @@ import { uploadToCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import crypto from "node:crypto";
+import { SUPPORTED_CURRENCIES } from "../utils/supportedCurrency.js";
+import { Category } from "../model/category.model.js";
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -47,7 +49,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
 
     throw new ApiError(
       500,
-      "Something went wrong while generating access and refresh tokens",
+      "Something went wrong while generating access and refresh tokens"
     );
   }
 };
@@ -123,11 +125,12 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Invalid credentials");
   }
 
-  const { accessToken, refreshToken } =
-    await generateAccessAndRefreshTokens(user._id);
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+    user._id
+  );
 
   const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken",
+    "-password -refreshToken"
   );
 
   const cookieOptions = getAuthCookieOptions();
@@ -142,11 +145,10 @@ const loginUser = asyncHandler(async (req, res) => {
         {
           user: loggedInUser,
         },
-        "User logged in successfully",
-      ),
+        "User logged in successfully"
+      )
     );
 });
-
 
 const googleLogin = asyncHandler(async (req, res) => {
   const { code } = req.body;
@@ -180,10 +182,7 @@ const googleLogin = asyncHandler(async (req, res) => {
   const { email, name, picture, email_verified } = payload;
 
   if (!email || !email_verified) {
-    throw new ApiError(
-      400,
-      "Google account email could not be verified",
-    );
+    throw new ApiError(400, "Google account email could not be verified");
   }
 
   // Find existing user
@@ -203,12 +202,13 @@ const googleLogin = asyncHandler(async (req, res) => {
   }
 
   // Generate FinX's own authentication tokens
-  const { accessToken, refreshToken } =
-    await generateAccessAndRefreshTokens(user._id);
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+    user._id
+  );
 
   // Remove sensitive fields from response
   const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken",
+    "-password -refreshToken"
   );
 
   const cookieOptions = getAuthCookieOptions();
@@ -223,8 +223,8 @@ const googleLogin = asyncHandler(async (req, res) => {
         {
           user: loggedInUser,
         },
-        "User logged in with Google successfully",
-      ),
+        "User logged in with Google successfully"
+      )
     );
 });
 
@@ -238,7 +238,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     },
     {
       new: true,
-    },
+    }
   );
 
   const cookieOptions = getAuthCookieOptions();
@@ -247,13 +247,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     .status(200)
     .clearCookie("accessToken", cookieOptions)
     .clearCookie("refreshToken", cookieOptions)
-    .json(
-      new ApiResponse(
-        200,
-        null,
-        "User logged out successfully",
-      ),
-    );
+    .json(new ApiResponse(200, null, "User logged out successfully"));
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
@@ -265,7 +259,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
   const decodedToken = jwt.verify(
     incomingRefreshToken,
-    process.env.REFRESH_TOKEN_SECRET,
+    process.env.REFRESH_TOKEN_SECRET
   );
 
   const user = await User.findById(decodedToken?._id);
@@ -278,8 +272,9 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Invalid refresh token");
   }
 
-  const { accessToken, refreshToken } =
-    await generateAccessAndRefreshTokens(user._id);
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+    user._id
+  );
 
   const cookieOptions = getAuthCookieOptions();
 
@@ -287,13 +282,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
     .cookie("refreshToken", refreshToken, cookieOptions)
-    .json(
-      new ApiResponse(
-        200,
-        null,
-        "Access token refreshed successfully",
-      ),
-    );
+    .json(new ApiResponse(200, null, "Access token refreshed successfully"));
 });
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
@@ -318,11 +307,16 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
-  console.log("Current user", req.user);
-  
-  res
-    .status(200)
-    .json(new ApiResponse(200, req.user, "User fetched successfully"));
+  const categories = await Category.find({
+    $or: [{ userId: null }, { userId: req.userId }],
+  }).lean();
+
+  const user = {
+    ...req.user.toObject(),
+    categories,
+  };
+
+  res.status(200).json(new ApiResponse(200, user, "User fetched successfully"));
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
@@ -364,6 +358,47 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Avatar updated successfully"));
 });
 
+const updateDefaultCurrency = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const currency = req.body.currency?.toUpperCase();
+
+  if (!currency || !SUPPORTED_CURRENCIES.includes(currency)) {
+    throw new ApiError(400, "Unsupported currency.");
+  }
+
+  const transactionExists = await Transaction.exists({
+    userId,
+  });
+
+  if (transactionExists) {
+    throw new ApiError(
+      409,
+      "Currency cannot be changed after transactions have been created."
+    );
+  }
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        defaultCurrency: currency,
+      },
+    },
+    {
+      new: true,
+    }
+  ).select("-password -refreshToken");
+
+  if (!user) {
+    throw new ApiError(404, "User not found.");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Default currency updated successfully."));
+});
+
 export {
   registerUser,
   loginUser,
@@ -374,4 +409,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   googleLogin,
+  updateDefaultCurrency,
 };

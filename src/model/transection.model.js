@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import { SUPPORTED_CURRENCIES } from "../utils/supportedCurrency.js";
 
 const transactionSchema = new Schema(
   {
@@ -20,15 +21,21 @@ const transactionSchema = new Schema(
       required: true,
     },
 
-    date: {
-      type: Date,
-      required: true,
-    },
-
     amount: {
       type: Number,
       required: true,
       min: 0,
+    },
+
+    currency: {
+      type: String,
+      enum: SUPPORTED_CURRENCIES,
+      required: true,
+    },
+
+    date: {
+      type: Date,
+      required: true,
     },
 
     note: {
@@ -39,7 +46,7 @@ const transactionSchema = new Schema(
   },
   {
     timestamps: true,
-  },
+  }
 );
 
 transactionSchema.index({
@@ -47,7 +54,4 @@ transactionSchema.index({
   date: -1,
 });
 
-export const Transaction = mongoose.model(
-  "Transaction",
-  transactionSchema,
-);
+export const Transaction = mongoose.model("Transaction", transactionSchema);

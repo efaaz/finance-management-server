@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import { SUPPORTED_CURRENCIES } from "../utils/supportedCurrency.js";
 
 const spendingRecordSchema = new Schema(
   {
@@ -25,13 +26,18 @@ const spendingRecordSchema = new Schema(
       of: Number,
       default: {},
     },
+    currency: {
+      type: String,
+      enum: SUPPORTED_CURRENCIES,
+      required: true,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-spendingRecordSchema.index({ user: 1, date: 1 }, { unique: true });
+spendingRecordSchema.index({ user: 1, date: 1, currency: 1 }, { unique: true });
 
 export const SpendingRecord = mongoose.model(
   "SpendingRecord",

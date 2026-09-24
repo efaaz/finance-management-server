@@ -1,10 +1,16 @@
 import mongoose, { Schema } from "mongoose";
+import { SUPPORTED_CURRENCIES } from "../utils/supportedCurrency.js";
 
 const dailyRecordSchema = new Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      required: true,
+    },
+    currency: {
+      type: String,
+      enum: SUPPORTED_CURRENCIES,
       required: true,
     },
 
@@ -36,6 +42,6 @@ const dailyRecordSchema = new Schema(
   }
 );
 
-dailyRecordSchema.index({ user: 1, date: 1 }, { unique: true });
+dailyRecordSchema.index({ user: 1, date: 1, currency: 1 }, { unique: true });
 
 export const dailyRecord = mongoose.model("DailyRecord", dailyRecordSchema);

@@ -2,6 +2,7 @@ import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
+import { SUPPORTED_CURRENCIES } from "../utils/supportedCurrency.js";
 
 dotenv.config();
 const userSchema = new Schema(
@@ -24,6 +25,12 @@ const userSchema = new Schema(
     },
     avatar: {
       type: String,
+    },
+    defaultCurrency: {
+      type: String,
+      enum: SUPPORTED_CURRENCIES,
+      default: "BDT",
+      required: true,
     },
     refreshToken: {
       type: String,

@@ -30,4 +30,4 @@ app.use("/api/v1/spending-records", spendingRecordRoutes);
 app.use("/api/v1/updateDailyRecord", updateDailyRecord);
 app.use("/api/v1/transactions", transactionRoutes);
 
-export { app };
+export default app;

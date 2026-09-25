@@ -5,8 +5,8 @@
   "description": "This is the backend of Finance management website.",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "dev": "nodemon src/dev.js",
+    "start": "node src/dev.js"
   },
   "keywords": [
     "javaScript",

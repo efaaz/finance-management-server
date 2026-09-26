@@ -288,6 +288,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 const changeCurrentPassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const user = await User.findById(req.user._id);
+  console.log("User found:", user); // Debugging line
 
   if (!user) {
     throw new ApiError(404, "User not found");
@@ -334,6 +335,9 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 });
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError(400, "Avatar is required");
+  }
   const avatarLocalPath = req.file.path;
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar is required");

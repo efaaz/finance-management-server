@@ -23,7 +23,7 @@ router.route("/refresh-token").post(refreshAccessToken);
 
 // Secure routes
 router.route("/logout").post(verifyJWT, logoutUser);
-router.route("/change-password").post(verifyJWT, changeCurrentPassword);
+router.route("/change-password").patch(verifyJWT, changeCurrentPassword);
 router.route("/current-user").get(verifyJWT, getCurrentUser);
 router.route("/update-account").patch(verifyJWT, updateAccountDetails);
 router.route("/update-default-currency").patch(verifyJWT, updateDefaultCurrency);

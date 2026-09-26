@@ -8,6 +8,7 @@ import userRoutes from "./routes/user.routes.js";
 import spendingRecordRoutes from "./routes/spendingRecord.routes.js";
 import updateDailyRecord from "./routes/dailyRecords.routes.js";
 import transactionRoutes from "./routes/transaction.routes.js";
+import categoryRoutes from "./routes/category.routes.js";
 
 dotenv.config();
 
@@ -31,6 +32,8 @@ app.use("/api/v1/auth/users", userRoutes);
 app.use("/api/v1/spending-records", spendingRecordRoutes);
 app.use("/api/v1/updateDailyRecord", updateDailyRecord);
 app.use("/api/v1/transactions", transactionRoutes);
+
+app.use("/api/v1/categories", categoryRoutes);
 
 app.get("/", (req, res) => {
   res.json({

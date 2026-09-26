@@ -28,7 +28,7 @@ router.route("/current-user").get(verifyJWT, getCurrentUser);
 router.route("/update-account").patch(verifyJWT, updateAccountDetails);
 router.route("/update-default-currency").patch(verifyJWT, updateDefaultCurrency);
 router
-  .route("/avatar")
+  .route("/update-avatar")
   .patch(verifyJWT, upload.single("avatar"), updateUserAvatar);
 
 export default router;

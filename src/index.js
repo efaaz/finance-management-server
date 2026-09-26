@@ -18,7 +18,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      // "https://your-frontend.vercel.app",
+      "https://finx-fawn.vercel.app",
     ],
     credentials: true,
   }),

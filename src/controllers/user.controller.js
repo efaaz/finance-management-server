@@ -309,7 +309,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 
 const getCurrentUser = asyncHandler(async (req, res) => {
   const categories = await Category.find({
-    $or: [{ userId: null }, { userId: req.userId }],
+    $or: [{ userId: null }, { userId: req.user._id }],
   }).lean();
 
   const user = {

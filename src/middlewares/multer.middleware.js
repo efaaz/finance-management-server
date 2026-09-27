@@ -1,14 +1,18 @@
 import multer from "multer";
 
-// Configure multer to save files in a temporary directory
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "./public/temp"); // Ensure this directory exists
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname); // Save file with a timestamp prefix
-  },
-});
+// Configure multer to save files in a temporary directory 
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, "./public/temp"); // Ensure this directory exists
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, Date.now() + "-" + file.originalname); // Save file with a timestamp prefix
+//   },
+// });
+
+// for vercel deployment, you can use memory storage instead of disk storage
+
+const storage = multer.memoryStorage();
 
 export const upload = multer({
   storage,

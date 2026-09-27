@@ -24,20 +24,53 @@ const deleteFromCloudinary = async (publicId) => {
     return null;
   }
 };
-const uploadToCloudinary = async (filePath) => {
-  try {
-    if (!filePath) return null;
+// for ordinary server 
+// const uploadToCloudinary = async (filePath) => {
+//   try {
+//     if (!filePath) return null;
 
-    const response = await cloudinary.uploader.upload(filePath, {
-      resource_type: "auto",
+//     const response = await cloudinary.uploader.upload(filePath, {
+//       resource_type: "auto",
+//     });
+
+//     // console.log("File uploaded successfully", response.url);
+//     fs.unlinkSync(filePath);
+//     return response;
+//   } catch (error) {
+//     fs.unlinkSync(filePath);
+//     console.log(error);
+//     return null;
+//   }
+// };
+
+// for vercel deployment
+
+const uploadToCloudinary = async (buffer) => {
+  try {
+    if (!buffer) return null;
+
+    const response = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: "image",
+          folder: "finx/avatars",
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(result);
+        },
+      );
+
+      uploadStream.end(buffer);
     });
 
-    // console.log("File uploaded successfully", response.url);
-    fs.unlinkSync(filePath);
     return response;
   } catch (error) {
-    fs.unlinkSync(filePath);
-    console.log(error);
+    console.error("Cloudinary upload error:", error);
     return null;
   }
 };

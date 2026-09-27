@@ -338,12 +338,8 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   if (!req.file) {
     throw new ApiError(400, "Avatar is required");
   }
-  const avatarLocalPath = req.file.path;
-  if (!avatarLocalPath) {
-    throw new ApiError(400, "Avatar is required");
-  }
 
-  const avatar = await uploadToCloudinary(avatarLocalPath);
+  const avatar = await uploadToCloudinary(req.file.buffer);
   if (!avatar) {
     throw new ApiError(500, "Error uploading avatar");
   }

@@ -136,4 +136,63 @@ const deleteUserCreatedCategory = asyncHandler(
     );
   }
 );
-export { getUserCreatedCategories, createCategory, deleteUserCreatedCategory };
+
+const getManageCategories = asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    const [defaultCategories, userCategories, preferences] =
+        await Promise.all([
+            Category.find({
+                userId: null,
+            }).sort({ categoryName: 1 }),
+
+            Category.find({
+                userId,
+            }).sort({ categoryName: 1 }),
+
+            UserCategoryPreference.find({
+                userId,
+            }).select("categoryId"),
+        ]);
+
+    const disabledCategoryIds = new Set(
+        preferences.map((item) =>
+            item.categoryId.toString()
+        )
+    );
+
+    const formattedDefaultCategories =
+        defaultCategories.map((category) => ({
+            _id: category._id,
+            categoryName: category.categoryName,
+            type: category.type,
+            isDefault: true,
+            isDisabled: disabledCategoryIds.has(
+                category._id.toString()
+            ),
+        }));
+
+    const formattedUserCategories =
+        userCategories.map((category) => ({
+            _id: category._id,
+            categoryName: category.categoryName,
+            type: category.type,
+            isDefault: false,
+            isDisabled: false,
+        }));
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                defaultCategories:
+                    formattedDefaultCategories,
+
+                userCategories:
+                    formattedUserCategories,
+            },
+            "Categories retrieved successfully."
+        )
+    );
+});
+export { getUserCreatedCategories, createCategory, deleteUserCreatedCategory, getManageCategories };

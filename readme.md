@@ -4,9 +4,9 @@ FinX is a personal finance management web application built around a simple idea
 
 The project is designed as a practical full-stack application rather than a small CRUD demonstration. The goal is to combine authentication, financial record management, database design, API development, validation, server-state management, analytics, and a user-focused interface into one product. I am also intentionally keeping the architecture understandable and maintainable instead of introducing abstractions or libraries only for the sake of complexity.
 
-Live Website: [here](https://finx-fawn.vercel.app)  
-Client source code: [here](https://github.com/efaaz/finx-v2)  
-server source code: [here](https://github.com/efaaz/finance-management-server)
+Live Website: [FinX live website](https://finx-fawn.vercel.app)  
+Client source code: [GitHub](https://github.com/efaaz/finx-v2)  
+server source code: [GitHub](https://github.com/efaaz/finance-management-server)
 
 ## Overview
 

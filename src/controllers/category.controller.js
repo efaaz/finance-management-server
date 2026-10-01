@@ -4,7 +4,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { Category } from "../model/category.model.js";
 import mongoose from "mongoose";
 import { Transaction } from "../model/transection.model.js";
-import { UserCategoryPreference } from "../model/userCategoryPreference.model.js";
+import { UserCategoryPreference } from "../model/UserCategoryPreference.model.js";
 
 // get all user created categories
 const getUserCreatedCategories = asyncHandler(async (req, res) => {

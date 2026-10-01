@@ -4,6 +4,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { Category } from "../model/category.model.js";
 import mongoose from "mongoose";
 import { Transaction } from "../model/transection.model.js";
+import { UserCategoryPreference } from "../model/userCategoryPreference.model.js";
 
 // get all user created categories
 const getUserCreatedCategories = asyncHandler(async (req, res) => {
@@ -136,4 +137,160 @@ const deleteUserCreatedCategory = asyncHandler(
     );
   }
 );
-export { getUserCreatedCategories, createCategory, deleteUserCreatedCategory };
+
+const getManageCategories = asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    const [defaultCategories, userCategories, preferences] =
+        await Promise.all([
+            Category.find({
+                userId: null,
+            }).sort({ categoryName: 1 }),
+
+            Category.find({
+                userId,
+            }).sort({ categoryName: 1 }),
+
+            UserCategoryPreference.find({
+                userId,
+            }).select("categoryId"),
+        ]);
+
+    const disabledCategoryIds = new Set(
+        preferences.map((item) =>
+            item.categoryId.toString()
+        )
+    );
+
+    const formattedDefaultCategories =
+        defaultCategories.map((category) => ({
+            _id: category._id,
+            categoryName: category.categoryName,
+            type: category.type,
+            isDefault: true,
+            isDisabled: disabledCategoryIds.has(
+                category._id.toString()
+            ),
+        }));
+
+    const formattedUserCategories =
+        userCategories.map((category) => ({
+            _id: category._id,
+            categoryName: category.categoryName,
+            type: category.type,
+            isDefault: false,
+            isDisabled: false,
+        }));
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                defaultCategories:
+                    formattedDefaultCategories,
+
+                userCategories:
+                    formattedUserCategories,
+            },
+            "Categories retrieved successfully."
+        )
+    );
+});
+
+const getAvailableCategories = asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    const disabledPreferences =
+        await UserCategoryPreference.find({
+            userId,
+        }).select("categoryId");
+
+    const disabledCategoryIds =
+        disabledPreferences.map(
+            (item) => item.categoryId
+        );
+
+    const categories = await Category.find({
+        $or: [
+            {
+                userId: null,
+                _id: {
+                    $nin: disabledCategoryIds,
+                },
+            },
+            {
+                userId,
+            },
+        ],
+    }).sort({
+        type: 1,
+        categoryName: 1,
+    });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            categories,
+            "Available categories retrieved successfully."
+        )
+    );
+});
+
+const toggleCategoryStatus = asyncHandler(async (req, res) => {
+    const { categoryId } = req.params;
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        throw new ApiError(400, "Invalid category ID.");
+    }
+
+    const category = await Category.findById(categoryId);
+
+    if (!category) {
+        throw new ApiError(404, "Category not found.");
+    }
+
+    // Only default/system categories can be disabled
+    if (category.userId !== null) {
+        throw new ApiError(
+            400,
+            "User-created categories cannot be disabled."
+        );
+    }
+
+    const existingPreference =
+        await UserCategoryPreference.findOne({
+            userId,
+            categoryId,
+        });
+
+    if (existingPreference) {
+        // Already disabled → enable it
+        await UserCategoryPreference.deleteOne({
+            _id: existingPreference._id,
+        });
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                { isDisabled: false },
+                "Category enabled successfully."
+            )
+        );
+    }
+
+    // Currently enabled → disable it
+    await UserCategoryPreference.create({
+        userId,
+        categoryId,
+    });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            { isDisabled: true },
+            "Category disabled successfully."
+        )
+    );
+});
+export { getUserCreatedCategories, createCategory, deleteUserCreatedCategory, getManageCategories, toggleCategoryStatus, getAvailableCategories };

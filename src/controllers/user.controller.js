@@ -158,10 +158,7 @@ const googleLogin = asyncHandler(async (req, res) => {
   }
 
   // Exchange Google authorization code for Google tokens
-  const { tokens } = await client.getToken({
-    code,
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-  });
+  const { tokens } = await client.getToken({code});
 
   if (!tokens.id_token) {
     throw new ApiError(400, "Google ID token was not returned");
@@ -308,13 +305,9 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
-  const categories = await Category.find({
-    $or: [{ userId: null }, { userId: req.user._id }],
-  }).lean();
 
   const user = {
     ...req.user.toObject(),
-    categories,
   };
 
   res.status(200).json(new ApiResponse(200, user, "User fetched successfully"));

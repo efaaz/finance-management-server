@@ -1020,7 +1020,7 @@ const getThisMonthTransactions = asyncHandler(async (req, res) => {
 
   const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
 
-  const requestedLimit = Number.parseInt(req.query.limit, 10) || 20;
+  const requestedLimit = Number.parseInt(req.query.limit, 10) || 10;
 
   const limit = Math.min(Math.max(requestedLimit, 1), 100);
 

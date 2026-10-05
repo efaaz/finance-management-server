@@ -2,7 +2,6 @@ import dotenv from "dotenv";
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-
 import connectDB from "./db/index.js";
 import userRoutes from "./routes/user.routes.js";
 import spendingRecordRoutes from "./routes/spendingRecord.routes.js";
@@ -10,6 +9,7 @@ import updateDailyRecord from "./routes/dailyRecords.routes.js";
 import transactionRoutes from "./routes/transaction.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import dashboardOverviewRoutes from "./routes/dashboardOverview.routes.js";
+import reportRouter from "./routes/helpReport.routes.js";
 
 dotenv.config();
 
@@ -32,27 +32,14 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(
-        new Error(`CORS blocked origin: ${origin}`)
-      );
+      return callback(new Error(`CORS blocked origin: ${origin}`));
     },
 
     credentials: true,
 
-    methods: [
-      "GET",
-      "HEAD",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-    ],
+    allowedHeaders: ["Content-Type", "Authorization"],
 
     exposedHeaders: ["set-cookie"],
   })
@@ -69,6 +56,8 @@ app.use("/api/v1/transactions", transactionRoutes);
 
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/dashboard", dashboardOverviewRoutes);
+
+app.use("/api/v1/reports", reportRouter);
 
 app.get("/", (req, res) => {
   res.json({

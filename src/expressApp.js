@@ -7,6 +7,7 @@ import updateDailyRecord from "./routes/dailyRecords.routes.js";
 import transactionRoutes from "./routes/transaction.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import dashboardOverviewRoutes from "./routes/dashboardOverview.routes.js";
+import reportRouter from "./routes/helpReport.routes.js";
 
 const app = express();
 
@@ -34,5 +35,10 @@ app.use("/api/v1/transactions", transactionRoutes);
 
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/dashboard", dashboardOverviewRoutes);
+
+app.use(
+    "/api/v1/help/reports",
+    reportRouter,
+);
 
 export default app;

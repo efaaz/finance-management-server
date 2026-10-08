@@ -1,5 +1,5 @@
 import { Router} from "express";
-import { createTransaction, getMonthlyTransactions, getSpendingByCategory, getThisMonthTransactions, getTodaysTransactions, getTransactions, getThisMonthsSummary } from "../controllers/transaction.controller.js";
+import { createTransaction, getMonthlyTransactions, getSpendingByCategory, getThisMonthTransactions, getTodaysTransactions, getTransactions, getThisMonthsSummary, exportTransactions } from "../controllers/transaction.controller.js";
 
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 const router = Router();
@@ -12,6 +12,7 @@ router.route("/getThisMonthsSummary").get(verifyJWT, getThisMonthsSummary);
 router.route('/today').get(getTodaysTransactions);
 router.route("/monthly").get(verifyJWT, getMonthlyTransactions);
 router.route("/categories").get(verifyJWT, getSpendingByCategory);
+router.route("/export").get(verifyJWT, exportTransactions);
 
 
 export default router;

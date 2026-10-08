@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import ExcelJS from "exceljs";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { ApiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -7,13 +8,7 @@ import { Transaction } from "../model/transection.model.js";
 import { dailyRecord } from "../model/dailyRecords.model.js";
 import { SpendingRecord } from "../model/spendingRecored.model.js";
 
-
-
-/*
-|--------------------------------------------------------------------------
-| Helpers
-|--------------------------------------------------------------------------
-*/
+// Helpers
 
 /**
  * Convert a date into the DailyRecord date key.
@@ -1214,7 +1209,6 @@ const getThisMonthTransactions = asyncHandler(async (req, res) => {
   );
 });
 
-
 const getThisMonthsSummary = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1234,11 +1228,7 @@ const getThisMonthsSummary = async (req, res) => {
 
     // Transaction date boundaries
     const startOfMonth = new Date(year, now.getMonth(), 1);
-    const startOfNextMonth = new Date(
-      year,
-      now.getMonth() + 1,
-      1
-    );
+    const startOfNextMonth = new Date(year, now.getMonth() + 1, 1);
 
     const [dailySummary, spendingByCategory] = await Promise.all([
       // --------------------------------
@@ -1361,6 +1351,414 @@ const getThisMonthsSummary = async (req, res) => {
 };
 
 
+
+// Bangladesh date helpers
+
+const BD_OFFSET_MS = 6 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Get current time as Bangladesh local time
+const getBangladeshNow = () => {
+  return new Date(Date.now() + BD_OFFSET_MS);
+};
+
+// Convert Bangladesh local date/time
+// to actual UTC Date.
+const bangladeshDateToUTC = (
+  year,
+  month,
+  day,
+  hours = 0,
+  minutes = 0,
+  seconds = 0,
+  milliseconds = 0
+) => {
+  return new Date(
+    Date.UTC(year, month, day, hours, minutes, seconds, milliseconds) -
+      BD_OFFSET_MS
+  );
+};
+
+// Date range builder
+const getDateFilter = ({ dateRange, startDate, endDate }) => {
+  // return empty filter for "all" range
+  if (dateRange === "all") {
+    return {};
+  }
+
+  const now = getBangladeshNow();
+
+  const year = now.getUTCFullYear();
+
+  const month = now.getUTCMonth();
+
+  // ----------------------------------------------
+  // This month
+  // ----------------------------------------------
+
+  if (dateRange === "month") {
+    return {
+      $gte: bangladeshDateToUTC(year, month, 1),
+
+      $lt: bangladeshDateToUTC(year, month + 1, 1),
+    };
+  }
+
+  // ----------------------------------------------
+  // Last 3 months
+  // ----------------------------------------------
+
+  if (dateRange === "3months") {
+    return {
+      $gte: bangladeshDateToUTC(year, month - 2, 1),
+
+      $lt: bangladeshDateToUTC(year, month + 1, 1),
+    };
+  }
+
+  // ----------------------------------------------
+  // This year
+  // ----------------------------------------------
+
+  if (dateRange === "year") {
+    return {
+      $gte: bangladeshDateToUTC(year, 0, 1),
+
+      $lt: bangladeshDateToUTC(year + 1, 0, 1),
+    };
+  }
+
+  // ----------------------------------------------
+  // Custom
+  // ----------------------------------------------
+
+  if (dateRange === "custom") {
+    if (!startDate || !endDate) {
+      throw new ApiError(
+        400,
+        "Start date and end date are required for a custom range."
+      );
+    }
+
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+    ) {
+      throw new ApiError(400, "Invalid date format. Use YYYY-MM-DD.");
+    }
+
+    const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+
+    const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
+
+    const start = bangladeshDateToUTC(startYear, startMonth - 1, startDay);
+
+    // Exclusive end = next day
+    const end = bangladeshDateToUTC(endYear, endMonth - 1, endDay + 1);
+
+    if (!start || !end || start >= end) {
+      throw new ApiError(400, "Invalid custom date range.");
+    }
+
+    return {
+      $gte: start,
+      $lt: end,
+    };
+  }
+
+  throw new ApiError(400, "Invalid date range.");
+};
+const allowedColumns = new Set([
+  "date",
+  "type",
+  "category",
+  "amount",
+  "currency",
+  "note",
+  "transactionId",
+  "createdAt",
+]);
+
+const escapeCsvValue = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  let stringValue = String(value);
+
+  // Prevent spreadsheet formula injection
+  if (/^[=+\-@]/.test(stringValue)) {
+    stringValue = `'${stringValue}`;
+  }
+
+  if (
+    stringValue.includes('"') ||
+    stringValue.includes(",") ||
+    stringValue.includes("\n") ||
+    stringValue.includes("\r")
+  ) {
+    stringValue = `"${stringValue.replace(/"/g, '""')}"`;
+  }
+
+  return stringValue;
+};
+
+// Export Transactions
+const exportTransactions = asyncHandler(async (req, res) => {
+  const {
+    format = "csv",
+    dateRange = "all",
+    type = "all",
+    categoryId,
+    startDate,
+    endDate,
+    columns,
+  } = req.query;
+
+  // ----------------------------------------------
+  // Validate format
+  // ----------------------------------------------
+
+  if (!["csv", "excel"].includes(format)) {
+    throw new ApiError(400, "Format must be csv or excel.");
+  }
+
+  // ----------------------------------------------
+  // Parse columns
+  // ----------------------------------------------
+
+  const selectedColumns = String(columns || "")
+    .split(",")
+    .map((column) => column.trim())
+    .filter(Boolean);
+
+  if (selectedColumns.length === 0) {
+    throw new ApiError(400, "At least one export column is required.");
+  }
+
+  const invalidColumn = selectedColumns.find(
+    (column) => !allowedColumns.has(column)
+  );
+
+  if (invalidColumn) {
+    throw new ApiError(400, `Invalid export column: ${invalidColumn}`);
+  }
+
+  // ----------------------------------------------
+  // Build filter
+  // ----------------------------------------------
+
+  const filter = {
+    // Transaction model stores this as String
+    userId: req.user._id.toString(),
+  };
+
+  if (type !== "all") {
+    if (!["income", "spending"].includes(type)) {
+      throw new ApiError(400, "Invalid transaction type.");
+    }
+
+    filter.type = type;
+  }
+
+  const transactionDateFilter = getDateFilter({
+    dateRange,
+    startDate,
+    endDate,
+  });
+
+  if (Object.keys(transactionDateFilter).length > 0) {
+    filter.date = transactionDateFilter;
+  }
+
+  // ----------------------------------------------
+  // Category filter
+  // ----------------------------------------------
+
+  if (categoryId && categoryId !== "all") {
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      throw new ApiError(400, "Invalid category ID.");
+    }
+
+    const category = await Category.findOne({
+      _id: categoryId,
+      $or: [
+        { userId: null },
+        {
+          userId: req.user._id,
+        },
+      ],
+    }).lean();
+
+    if (!category) {
+      throw new ApiError(404, "Category not found.");
+    }
+
+    filter.categoryId = category._id;
+  }
+
+  // ----------------------------------------------
+  // IMPORTANT DEBUG
+  // ----------------------------------------------
+
+  console.log("Export filter:", filter);
+
+  const transactionCount = await Transaction.countDocuments(filter);
+
+  console.log("Transactions found:", transactionCount);
+
+  // ----------------------------------------------
+  // Get transactions
+  // ----------------------------------------------
+
+  const transactions = await Transaction.find(filter)
+    .populate({
+      path: "categoryId",
+      select: "categoryName",
+    })
+    .sort({ date: -1 })
+    .lean();
+
+  console.log("Transactions returned:", transactions.length);
+
+  // ----------------------------------------------
+  // Build export rows
+  // ----------------------------------------------
+
+  const rows = transactions.map((transaction) => {
+    return {
+      date: transaction.date
+        ? new Date(transaction.date).toLocaleDateString()
+        : "",
+
+      type: transaction.type || "",
+
+      category: transaction.categoryId?.categoryName || "Unknown",
+
+      amount: transaction.amount ?? "",
+
+      currency: transaction.currency || "",
+
+      note: transaction.note || "",
+
+      transactionId: transaction._id?.toString() || "",
+
+      createdAt: transaction.createdAt
+        ? new Date(transaction.createdAt).toLocaleString()
+        : "",
+    };
+  });
+
+  // ----------------------------------------------
+  // Headers
+  // ----------------------------------------------
+
+  const columnDefinitions = {
+    date: "Date",
+    type: "Type",
+    category: "Category",
+    amount: "Amount",
+    currency: "Currency",
+    note: "Note",
+    transactionId: "Transaction ID",
+    createdAt: "Created At",
+  };
+
+  const headers = selectedColumns.map((column) => columnDefinitions[column]);
+
+  // ==================================================
+  // CSV
+  // ==================================================
+
+  if (format === "csv") {
+    const csvRows = [];
+
+    // Header
+    csvRows.push(headers.map(escapeCsvValue).join(","));
+
+    // Data
+    for (const row of rows) {
+      csvRows.push(
+        selectedColumns.map((column) => escapeCsvValue(row[column])).join(",")
+      );
+    }
+
+    const csv = "\uFEFF" + csvRows.join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="finx-transactions.csv"'
+    );
+
+    return res.status(200).send(csv);
+  }
+
+  // ==================================================
+  // Excel
+  // ==================================================
+
+  const workbook = new ExcelJS.Workbook();
+
+  const worksheet = workbook.addWorksheet("Transactions");
+
+  worksheet.columns = selectedColumns.map((column) => ({
+    header: columnDefinitions[column],
+    key: column,
+    width: column === "note" ? 35 : column === "transactionId" ? 28 : 18,
+  }));
+
+  // Add rows
+  for (const row of rows) {
+    worksheet.addRow(row);
+  }
+
+  // Header styling
+  const headerRow = worksheet.getRow(1);
+
+  headerRow.font = {
+    bold: true,
+  };
+
+  headerRow.alignment = {
+    vertical: "middle",
+  };
+
+  // Freeze header
+  worksheet.views = [
+    {
+      state: "frozen",
+      ySplit: 1,
+    },
+  ];
+
+  // Auto filter
+  worksheet.autoFilter = {
+    from: "A1",
+    to: `${String.fromCharCode(64 + selectedColumns.length)}1`,
+  };
+
+  // ----------------------------------------------
+  // Generate completed XLSX buffer
+  // ----------------------------------------------
+
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="finx-transactions.xlsx"'
+  );
+
+  res.setHeader("Content-Length", buffer.length);
+
+  return res.status(200).send(buffer);
+});
 export {
   getTransactions,
   createTransaction,
@@ -1370,5 +1768,6 @@ export {
   getMonthlyTransactions,
   getSpendingByCategory,
   getThisMonthTransactions,
-  getThisMonthsSummary
+  getThisMonthsSummary,
+  exportTransactions,
 };

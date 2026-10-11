@@ -8,14 +8,13 @@ import transactionRoutes from "./routes/transaction.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import dashboardOverviewRoutes from "./routes/dashboardOverview.routes.js";
 import reportRouter from "./routes/helpReport.routes.js";
+import analyticsRoutes from "./routes/analytics.route.js";
 
 const app = express();
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-    ],
+    origin: ["http://localhost:3000"],
     credentials: true,
     exposedHeaders: ["set-cookie"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -27,7 +26,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.use(cookieParser());
 
-
 app.use("/api/v1/auth/users", userRoutes);
 app.use("/api/v1/spending-records", spendingRecordRoutes);
 app.use("/api/v1/updateDailyRecord", updateDailyRecord);
@@ -35,10 +33,9 @@ app.use("/api/v1/transactions", transactionRoutes);
 
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/dashboard", dashboardOverviewRoutes);
+app.use("/api/v1/help/reports", reportRouter);
+app.use("/api/v1/analytics", analyticsRoutes);
 
-app.use(
-    "/api/v1/help/reports",
-    reportRouter,
-);
+
 
 export default app;

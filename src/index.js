@@ -10,6 +10,7 @@ import transactionRoutes from "./routes/transaction.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import dashboardOverviewRoutes from "./routes/dashboardOverview.routes.js";
 import reportRouter from "./routes/helpReport.routes.js";
+import analyticsRoutes from "./routes/analytics.route.js";
 
 dotenv.config();
 
@@ -58,6 +59,7 @@ app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/dashboard", dashboardOverviewRoutes);
 
 app.use("/api/v1/reports", reportRouter);
+app.use("/api/v1/analytics", analyticsRoutes);
 
 app.get("/", (req, res) => {
   res.json({
